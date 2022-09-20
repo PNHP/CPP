@@ -228,7 +228,7 @@ class Toolbox(object):
                       GreenSalamanderSupporting, MountainChorusFrogCore, MountainChorusFrogSupporting, LepidopteraForestMosaicCore,
                       LepidopteraForestMosaicSupporting, LepidopteraWetlandCore, LepidopteraWetlandSupporting, NorthernCricketFrogCore,
                       NorthernCricketFrogSupporting,TimberRattlesnakeSupporting, BlueSpottedSalamanderCore, RoughGreenSnakeCore,
-                      RoughGreenSnakeSupporting, GeneralWatershedSupportingTool]  # <<<<<< ADD TOOLS HERE >>>>>>>>
+                      RoughGreenSnakeSupporting, GeneralWatershedSupportingTool, AquaticCore]  # <<<<<< ADD TOOLS HERE >>>>>>>>
 
 ######################################################################################################################################################
 ## Set Definition Query
@@ -2453,10 +2453,6 @@ class RoughGreenSnakeSupporting(object):
             with arcpy.da.InsertCursor(cpp_supporting, fields) as cursor:
                 cursor.insertRow(values)
 
-
-
-
-
 ######################################################################################################################################################
 ## General Watershed Supporting
 ######################################################################################################################################################
@@ -2500,3 +2496,93 @@ class GeneralWatershedSupportingTool(object):
             cursor.insertRow(values)
 
         return
+
+class AquaticCore(object):
+    def __init__(self):
+        self.label = "Aquatic Core"
+        self.description = """"""
+        self.canRunInBackground = False
+        self.category = "General CPP Tools"
+        self.params = [
+            parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("NHD Flowlines", "flowlines", "GPFeatureLayer", r'W:\Heritage\Heritage_Data\Heritage_Data_Tools\AquaticNetworkData.gdb\Aquatic_network\NHDFlowline'),
+            parameter("Network datset built on NHD flowlines", "network", "GPNetworkDatasetLayer", r'W:\Heritage\Heritage_Data\Heritage_Data_Tools\AquaticNetworkData.gdb\Aquatic_network\PA_network_ND'),
+            parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
+            parameter("Upstream Distance (meters)", "up_dist", "GPLinearUnit"),
+            parameter("Downstream Distance (meters)", "down_dist", "GPLinearUnit"),
+            parameter("CPP Spec ID", "specID", "GPString", "", "Optional")]
+
+    def getParameterInfo(self):
+        return self.params
+
+    def execute(self, params, messages):
+        eoid = params[0].valueAsText
+        cpp_core = params[1].valueAsText
+        flowlines = params[2].valueAsText
+        network = params[3].valueAsText
+        wenger = params[4].valueAsText
+        up_dist = params[5].valueAsText
+        down_dist = params[6].valueAsText
+        specID = params[7].valueAsText
+
+        arcpy.env.overwriteOutput = True
+        arcpy.env.workspace = "memory"
+
+        eo_ptreps = "Biotics\\eo_ptreps"
+        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
+
+        sf_buff = bufferFeatures(srcfeatures, eoid, 1)
+        sf_points = arcpy.FeatureVerticesToPoints_management(sf_buff,"sf_points","ALL")
+
+        #delete identical points with tolerance to increase speed
+        arcpy.DeleteIdentical_management(sf_points,["Shape"],"100 Meters")
+
+        #arcpy.AddMessage("Creating service area line layer for " +str(species) + " to compare to existing EOs")
+        #create service area line layer
+        eo_service_area_lyr = arcpy.na.MakeServiceAreaAnalysisLayer(network,"eo_service_area_lyr","Length","FROM_FACILITIES",up_dist)
+        eo_service_area_lyr = eo_service_area_lyr.getOutput(0)
+        subLayerNames = arcpy.na.GetNAClassNames(eo_service_area_lyr)
+        eo_facilitiesLayerName = subLayerNames["Facilities"]
+        eo_serviceLayerName = subLayerNames["SAPolygons"]
+        arcpy.na.AddLocations(eo_service_area_lyr, eo_facilitiesLayerName, sf_points, "", 100)
+        arcpy.na.Solve(eo_service_area_lyr)
+        eo_polys = eo_service_area_lyr.listLayers(eo_serviceLayerName)[0]
+        eo_service_area = arcpy.FeatureClassToFeatureClass_conversion(eo_polys,"memory","eo_service_area")
+
+        flowline_clip = arcpy.Clip_analysis(flowlines,eo_service_area,"flowline_clip")
+        flowline_buff = arcpy.Buffer_analysis(flowline_clip,"flowline_buff",200,"FULL","FLAT","ALL")
+        wenger_clip = arcpy.Clip_analysis(flowline_buff,wenger,"wenger_clip")
+
+        with arcpy.da.SearchCursor(wenger_clip, 'SHAPE@') as cursor:
+            for row in cursor:
+                geom_up = row[0]
+
+        drawn_notes = "This polygon represents the upstream distance along the stream network. Edit polygon to trace Wenger, cutoff at downstream limit, and remove tribs if needed."
+        values = calc_attr_core(eoid, eo_ptreps, specID, drawn_notes)
+        values.append(geom_up)
+        fields = ["SNAME", "EO_ID", "DrawnBy", "DrawnDate", "DrawnNotes", "Status", "SpecID", "ELSUBID", "BioticsExportDate", "SHAPE@"]
+        with arcpy.da.InsertCursor(cpp_core, fields) as cursor:
+            cursor.insertRow(values)
+
+        # get downstream distance cutoff
+        eo_service_area_lyr = arcpy.na.MakeServiceAreaAnalysisLayer(network,"eo_service_area_lyr","Length","FROM_FACILITIES",down_dist)
+        eo_service_area_lyr = eo_service_area_lyr.getOutput(0)
+        subLayerNames = arcpy.na.GetNAClassNames(eo_service_area_lyr)
+        eo_facilitiesLayerName = subLayerNames["Facilities"]
+        eo_serviceLayerName = subLayerNames["SAPolygons"]
+        arcpy.na.AddLocations(eo_service_area_lyr, eo_facilitiesLayerName, sf_points, "", 100)
+        arcpy.na.Solve(eo_service_area_lyr)
+        eo_polys = eo_service_area_lyr.listLayers(eo_serviceLayerName)[0]
+        eo_service_area = arcpy.FeatureClassToFeatureClass_conversion(eo_polys,"memory","eo_service_area")
+
+        with arcpy.da.SearchCursor(eo_service_area, 'SHAPE@') as cursor:
+            for row in cursor:
+                geom_up = row[0]
+
+        drawn_notes = "This polygon represents the downstream distance. Use this poly to cutoff at downstream distance and then delete this poly."
+        values = calc_attr_core(eoid, eo_ptreps, specID, drawn_notes)
+        values.append(geom_up)
+        fields = ["SNAME", "EO_ID", "DrawnBy", "DrawnDate", "DrawnNotes", "Status", "SpecID", "ELSUBID", "BioticsExportDate", "SHAPE@"]
+        with arcpy.da.InsertCursor(cpp_core, fields) as cursor:
+            cursor.insertRow(values)
