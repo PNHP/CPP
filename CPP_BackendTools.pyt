@@ -162,3 +162,65 @@ class SelectIdentical(object):
         else:
             arcpy.AddWarning("No duplicate EOIDs were found")
 
+
+
+
+
+
+
+######################################################################################################################################################
+## Begin ET Check Tool
+######################################################################################################################################################
+
+class ETCheck(object):
+    def __init__(self):
+        self.label = "ET Check"
+        self.description = "Use this tool to check whether the SNAME and ELSUBID match the EO data in Biotics"
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        cpp_layer = arcpy.Parameter(
+            displayName = "CPP Layer for ET Checks",
+            name = "cpp_layer",
+            datatype = "GPFeatureLayer",
+            parameterType = "Required",
+            direction = "Input")
+
+        eo_ptreps = arcpy.Parameter(
+            displayName = "EO Point Reps Layer",
+            name = "eo_ptreps",
+            datatype = "GPFeatureLayer",
+            parameterType = "Required",
+            direction = "Input")
+
+        params = [cpp_layer, eo_ptreps]
+        return params
+
+    def isLicensed(self):
+        return True
+
+    def updateParameters(self, params):
+        return
+
+    def updateMessages(self, params):
+        return
+
+    def execute(self, params, messages):
+
+        cpp_layer = params[0].valueAsText
+
+        eoids = []
+        dups = []
+
+        with arcpy.da.SearchCursor(cpp_layer,"EO_ID") as cursor:
+            for row in cursor:
+                if row[0] in eoids:
+                    dups.append(row[0])
+                else:
+                    eoids.append(row[0])
+
+        if len(dups) > 1:
+            query = """EO_ID IN {0}""".format(str(tuple(dups)))
+            arcpy.SelectLayerByAttribute_management(cpp_layer,"NEW_SELECTION", query)
+        else:
+            arcpy.AddWarning("No duplicate EOIDs were found")

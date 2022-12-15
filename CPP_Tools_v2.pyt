@@ -241,8 +241,9 @@ class SetDefQuery(object):
         self.canRunInBackground = False
         self.category = "General CPP Tools"
         self.params = [
-            parameter("EO ID that you wish to use for definitiona query on all Biotics and CPP layers:", "eoid",
-                      "GPLong")]
+            parameter("EO ID that you wish to use for definition query on all Biotics and CPP layers:", "eoid",
+                      "GPLong"),
+            parameter("SpecID you wish to filter", "specid", "GPString", "", "Optional")]
 
     def getParameterInfo(self):
         return self.params
@@ -250,6 +251,7 @@ class SetDefQuery(object):
     def execute(self, params, messages):
         # define parameters
         eoid = params[0].valueAsText
+        specid = params[1].valueAsText
 
         aprx = arcpy.mp.ArcGISProject("CURRENT")
         m = aprx.listMaps("Map")[0]
@@ -257,6 +259,9 @@ class SetDefQuery(object):
             lyr.definitionQuery = "EO_ID = {}".format(eoid)
         for lyr in m.listLayers("CPP *"):
             lyr.definitionQuery = "EO_ID = {} OR EO_ID IS NULL".format(eoid)
+        if specid:
+            for lyr in m.listLayers("spec filter*"):
+                lyr.definitionQuery = "SpecID = '{}'".format(specid)
 
 ######################################################################################################################################################
 ## Buffer SFs
