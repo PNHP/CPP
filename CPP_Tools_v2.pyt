@@ -17,6 +17,12 @@ from arcgis.features import FeatureLayer
 arcpy.env.overwriteOutput = True
 arcpy.env.workspace = "memory"
 
+# set Biotics parameters
+eo_ptreps = "eo_ptreps"
+srcfeatures = ["eo_sourcept", "eo_sourceln", "eo_sourcepy"]
+cpp_core_path = "CPP Core"
+cpp_supporting_path = "CPP Supporting"
+
 # define functions below
 def parameter(displayName, name, datatype, defaultValue=None, parameterType='Required', direction='Input',
               multiValue=False, filterList=None):
@@ -243,7 +249,7 @@ class SetDefQuery(object):
         self.params = [
             parameter("EO ID that you wish to use for definition query on all Biotics and CPP layers:", "eoid",
                       "GPLong"),
-            parameter("SpecID you wish to filter", "specid", "GPString", "", "Optional")]
+            parameter("SpecID you wish to filter (if filtering for entire taxa, just input first word of SpecID)", "specid", "GPString", "", "Optional")]
 
     def getParameterInfo(self):
         return self.params
@@ -255,13 +261,16 @@ class SetDefQuery(object):
 
         aprx = arcpy.mp.ArcGISProject("CURRENT")
         m = aprx.listMaps("Map")[0]
+        arcpy.AddMessage("Adding definition query to Biotics EO layers...")
         for lyr in m.listLayers("eo_*"):
             lyr.definitionQuery = "EO_ID = {}".format(eoid)
+        arcpy.AddMessage("Adding definition query to CPP edit layers...")
         for lyr in m.listLayers("CPP *"):
             lyr.definitionQuery = "EO_ID = {} OR EO_ID IS NULL".format(eoid)
         if specid:
-            for lyr in m.listLayers("spec filter*"):
-                lyr.definitionQuery = "SpecID = '{}'".format(specid)
+            arcpy.AddMessage("Adding definition query to CPP spec filter layers...")
+            for lyr in m.listLayers("spec filter *"):
+                lyr.definitionQuery = "SpecID LIKE '{}%'".format(specid)
 
 ######################################################################################################################################################
 ## Buffer SFs
@@ -276,7 +285,7 @@ class BufferSFs(object):
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
             parameter("Buffer Distance", "buff_dist", "GPLinearUnit"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("CPP Spec ID", "specID", "GPString", "", "Optional")]
 
     def getParameterInfo(self):
@@ -288,9 +297,6 @@ class BufferSFs(object):
         buff_dist = params[1].valueAsText
         cpp_core = params[2].valueAsText
         specID = params[3].valueAsText
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         geom = bufferFeatures(srcfeatures, eoid, buff_dist)
 
@@ -312,9 +318,9 @@ class BufferCore(object):
         self.canRunInBackground = False
         self.category = "General CPP Tools"
         self.params = [
-            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Buffer Distance", "buff_dist", "GPLinearUnit"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -355,10 +361,10 @@ class PlantSupporting(object):
                      "Plants_Upland_forest_20121016"]
         self.params = [
             parameter("Which SpecID are you using?", "specID", "GPString", filterList=plantList),
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -421,7 +427,7 @@ class BaldEagleCore(object):
         self.category = "Birds"
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core")]
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -434,9 +440,6 @@ class BaldEagleCore(object):
         buff_dist = 201
         specID = "Birds_Bald_eagle_20150317"
         notes = "PRELIMINARY - check line-of-sight exclusions and remove unsuitable habitat"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         geom = bufferFeatures(srcfeatures, eoid, buff_dist)
 
@@ -458,8 +461,8 @@ class BaldEagleSupporting(object):
         self.canRunInBackground = False
         self.category = "Birds"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Wengerrd Buffer Layer", "wengerrd", "GPFeatureLayer"),
             parameter("Connection Line", "connection", "GPFeatureLayer", "", "Optional")]
@@ -542,7 +545,7 @@ class EasternRedbellyTurtleCore(object):
         self.category = "Reptiles"
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Habitat Delineation", "habitat", "GPFeatureLayer"),
             parameter("Buffered Habitat", "buffer", "GPFeatureLayer"),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
@@ -564,7 +567,6 @@ class EasternRedbellyTurtleCore(object):
         nhd_flowline = params[6].valueAsText
         waterbodies = params[7].valueAsText
 
-        eo_ptreps = "Biotics\\eo_ptreps"
         specID = "Reptiles_Eastern_Redbelly_Turtle_20140930"
 
         merge_features = []
@@ -635,8 +637,8 @@ class EasternRedbellyTurtleSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -675,7 +677,7 @@ class EasternSpadefootCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Unfiltered Core CPP Layer","unfiltered_cpp","GPFeatureLayer","no filter cpp"),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Floodplain", "floodplain", "GPFeatureLayer"),
@@ -694,9 +696,6 @@ class EasternSpadefootCore(object):
         wetland = params[5].valueAsText
 
         specID = "Amphibians_Eastern_Spadefoot_20130816"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         with arcpy.da.SearchCursor(eo_ptreps,"ELSUBID") as cursor:
             for row in cursor:
@@ -768,8 +767,8 @@ class EasternSpadefootSupporting(object):
         self.canRunInBackground = False
         self.category = "Amphibians"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -808,7 +807,7 @@ class SpottedTurtleCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Ch93 Streams", "streams", "GPFeatureLayer"),
             parameter("Unmapped Wetland", "wetland", "GPFeatureLayer", "", "Optional")]
@@ -825,9 +824,6 @@ class SpottedTurtleCore(object):
         wetland = params[4].valueAsText
 
         specID = "Reptiles_Spotted_Turtle_20130430"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         clip_geom = bufferFeatures(srcfeatures, eoid, 1000)
 
@@ -876,8 +872,8 @@ class SpottedTurtleSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -921,7 +917,7 @@ class NorthernLeopardFrogCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Ch93 Streams", "streams", "GPFeatureLayer"),
             parameter("Unmapped Wetland", "wetland", "GPFeatureLayer", "", "Optional")]
@@ -938,9 +934,6 @@ class NorthernLeopardFrogCore(object):
         wetland = params[4].valueAsText
 
         specID = "Amphibians_Northern_Leopard_Frog_20130225"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         clip_geom = bufferFeatures(srcfeatures, eoid, 3000)
 
@@ -985,10 +978,10 @@ class NorthernLeopardFrogSupporting(object):
         self.canRunInBackground = False
         self.category = "Amphibians"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1025,7 +1018,7 @@ class HellbenderMudpuppyCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
             parameter("Which spec are you using?", "specID", "GPString", filterList=["Amphibians_Eastern_Hellbender_20130528","Amphibians_Mudpuppy_20130528"])]
 
@@ -1043,9 +1036,6 @@ class HellbenderMudpuppyCore(object):
             notes = "PRELIMINARY - remove tributaries if < 4 Strahler class and/or downstream tributaries, connect disjointed CPPs along same stem"
         else:
             notes = "PRELIMINARY - remove tributaries if < 3 Strahler class and/or downstream tributaries, connect disjointed CPPs along same stem"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         buff_feat = bufferFeatures(srcfeatures, eoid, 350)
         clip_feat = arcpy.Clip_analysis(buff_feat,wenger,os.path.join("memory","clip_feat"))
@@ -1073,7 +1063,7 @@ class AlleghenyWoodratCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Butchkoski Active Woodrat Geology Layer", "woodrat_geo", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -1086,9 +1076,6 @@ class AlleghenyWoodratCore(object):
         woodrat_geo = params[2].valueAsText
 
         specID = "Mammals_Allegheny_woodrat_20100521"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         merge_features = []
         buff_feat = bufferFeatures(srcfeatures, eoid, 200)
@@ -1126,8 +1113,8 @@ class AlleghenyWoodratSupporting(object):
         self.description = """
         """
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("WPC 25ac Forest Blocks", "forest", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -1170,7 +1157,7 @@ class EasternHognoseSnakeCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Unfiltered Core CPP Layer", "unfiltered_cpp", "GPFeatureLayer", "no filter cpp"),
             parameter("Floodplains", "floodplains", "GPFeatureLayer"),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
@@ -1190,9 +1177,6 @@ class EasternHognoseSnakeCore(object):
 
         specID = "Reptiles_Eastern_Hognose_Snake_20121024"
         notes = "PRELIMINARY CORE - remove unsuitable habitat and connect cores along suitable habitat corrdors"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         with arcpy.da.SearchCursor(eo_ptreps,"ELSUBID") as cursor:
             for row in cursor:
@@ -1267,11 +1251,11 @@ class EasternHognoseSnakeSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1319,7 +1303,7 @@ class QueensnakeCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Polygon representing the delineated stream 1730m upstream and downstream of occurrences", "stream_poly", "GPFeatureLayer"),
             parameter("NWI Layer", "NWI", "GPFeatureLayer")]
 
@@ -1335,8 +1319,6 @@ class QueensnakeCore(object):
 
         specID = "Reptiles_Queen_Snake_20131031"
         notes = "PRELIMINARY CORE - remove unsuitable habitat and ensure the stream width adjacent to added wetlands is included"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
 
         merge_features = []
 
@@ -1376,11 +1358,11 @@ class QueensnakeSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1430,7 +1412,7 @@ class ShortheadGarterSnakeCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Unfiltered Core CPP Layer","unfiltered_cpp","GPFeatureLayer","no filter cpp"),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Stream Layer", "streams", "GPFeatureLayer"),
@@ -1449,9 +1431,6 @@ class ShortheadGarterSnakeCore(object):
         open_land = params[5].valueAsText
 
         specID = "Reptiles_Shorthead_Garter_Snake_20130524"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         with arcpy.da.SearchCursor(eo_ptreps,"ELSUBID") as cursor:
             for row in cursor:
@@ -1521,11 +1500,11 @@ class ShortheadGarterSnakeSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1572,8 +1551,8 @@ class NorthernCoalSkinkSupporting(object):
         self.description = """
         """
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("WPC 25ac Forest Blocks", "forest", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
@@ -1587,7 +1566,6 @@ class NorthernCoalSkinkSupporting(object):
         forest = params[2].valueAsText
         huc12 = params[3].valueAsText
 
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
         with arcpy.da.SearchCursor(core,"EO_ID") as cursor:
             for row in cursor:
                 eoid = row[0]
@@ -1638,10 +1616,10 @@ class EasternRibbonSnakeSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1677,8 +1655,8 @@ class GreenSalamanderSupporting(object):
         self.description = """
         """
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("PA Bedrock Geology Layer (pagpoly)", "geology", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
@@ -1734,7 +1712,7 @@ class MountainChorusFrogCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("WPC 25ac Forest Blocks", "forest", "GPFeatureLayer")]
 
@@ -1749,9 +1727,6 @@ class MountainChorusFrogCore(object):
         forest = params[3].valueAsText
 
         specID = "Amphibians_Mountain_Chorus_Frog_20130516"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         merge_features = []
 
@@ -1793,8 +1768,8 @@ class MountainChorusFrogSupporting(object):
         self.description = """
         """
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("WPC 25ac Forest Blocks", "forest", "GPFeatureLayer"),
             parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
 
@@ -1852,7 +1827,7 @@ class LepidopteraForestMosaicCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Community Classification Layer", "communities", "GPFeatureLayer"),
             parameter("Core inferred extent radius", "inferred_extent_distance", "GPLinearUnit")]
 
@@ -1867,9 +1842,6 @@ class LepidopteraForestMosaicCore(object):
         inferred_extent_distance = params[3].valueAsText
 
         specID = "Lepidoptera_Forest_Mosaic_20150409"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         merge_features = []
 
@@ -1937,8 +1909,8 @@ class LepidopteraForestMosaicSupporting(object):
         self.canRunInBackground = False
         self.category = "Lepidoptera"
         self.params = [
-            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -1974,7 +1946,7 @@ class LepidopteraWetlandCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
             parameter("Unmapped Wetland", "wetland", "GPFeatureLayer", "", "Optional"),
@@ -1993,9 +1965,6 @@ class LepidopteraWetlandCore(object):
         core_radius = params[5].valueAsText
 
         specID = "Lepidoptera_Wetland_20130118"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         inferred_extent = bufferFeatures(srcfeatures, eoid, core_radius)
         selection_buffer = bufferFeatures(srcfeatures, eoid, "200 Meters")
@@ -2047,8 +2016,8 @@ class LepidopteraWetlandSupporting(object):
         self.description = """
         """
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
             parameter("Core extent radius", "core_radius", "GPLinearUnit"),
@@ -2069,8 +2038,6 @@ class LepidopteraWetlandSupporting(object):
         with arcpy.da.SearchCursor(cpp_core,"EO_ID") as cursor:
             for row in cursor:
                 eoid = row[0]
-
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         merge_features = []
 
@@ -2095,7 +2062,7 @@ class LepidopteraWetlandSupporting(object):
         wenger_clip = arcpy.Clip_analysis(wenger,inferred_extent,"memory\\wenger_clip")
         wenger_lyr = arcpy.MakeFeatureLayer_management(wenger_clip,"wenger_lyr")
         wenger_lyr = arcpy.SelectLayerByLocation_management(wenger_lyr,"INTERSECT",selection_buffer,"","NEW_SELECTION")
-        select_adjacent_features(wenger_lyr)
+        #select_adjacent_features(wenger_lyr)
         desc = arcpy.Describe(wenger_lyr)
         if desc.FIDSet == '':
             pass
@@ -2133,7 +2100,7 @@ class NorthernCricketFrogCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Stream/Riverbank Habitat Layer", "streams", "GPFeatureLayer"),
             parameter("Unmapped Wetland", "wetland", "GPFeatureLayer", "", "Optional")]
@@ -2150,9 +2117,6 @@ class NorthernCricketFrogCore(object):
         wetland = params[4].valueAsText
 
         specID = "Amphibians_Northern_Cricket_Frog_20130225"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         clip_geom = bufferFeatures(srcfeatures, eoid, 1300)
 
@@ -2195,10 +2159,10 @@ class NorthernCricketFrogSupporting(object):
         self.canRunInBackground = False
         self.category = "Amphibians"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -2240,8 +2204,8 @@ class TimberRattlesnakeSupporting(object):
         self.canRunInBackground = False
         self.category = "Reptiles"
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
-            parameter("Supporting CPP Layer", "supporting", "GPFeatureLayer", "CPPEdit\\CPP Supporting"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("Supporting CPP Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
             parameter("WPC's 25ac Forest Patches", "forest_patches", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -2255,8 +2219,6 @@ class TimberRattlesnakeSupporting(object):
         with arcpy.da.SearchCursor(core,"EO_ID") as cursor:
             for row in cursor:
                 eoid = row[0]
-
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         buff_9km = bufferFeatures(srcfeatures, eoid, 9000)
         buff_100m = bufferFeatures(srcfeatures, eoid, 100)
@@ -2305,7 +2267,7 @@ class BlueSpottedSalamanderCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NWI Layer", "NWI", "GPFeatureLayer"),
             parameter("Unmapped Wetland", "wetland", "GPFeatureLayer", "", "Optional")]
 
@@ -2320,9 +2282,6 @@ class BlueSpottedSalamanderCore(object):
         unmapped_wetland = params[3].valueAsText
 
         specID = "Amphibians_Blue_Spotted_Salamander_20130225"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         inferred_extent = bufferFeatures(srcfeatures, eoid, "305 Meters")
 
@@ -2367,7 +2326,7 @@ class RoughGreenSnakeCore(object):
         """
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("WPC 25ac Forest Blocks", "forest", "GPFeatureLayer")]
 
     def getParameterInfo(self):
@@ -2380,9 +2339,6 @@ class RoughGreenSnakeCore(object):
         forest = params[2].valueAsText
 
         specID = "Reptiles_Rough_Green_Snake_20130220"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         select_geom = bufferFeatures(srcfeatures, eoid, 67)
 
@@ -2414,9 +2370,9 @@ class RoughGreenSnakeSupporting(object):
         self.description = """Takes multiple cores!
         """
         self.params = [
-            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -2469,12 +2425,12 @@ class GeneralWatershedSupportingTool(object):
         self.category = "General CPP Tools"
         self.description = ""
         self.params = [
-            parameter("Selected CPP Core", "core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
             parameter("Minimum Buffer Distance", "buff_dist", "GPLinearUnit"),
             parameter("Maximum Distance", "max_dist", "GPLinearUnit", defaultValue=None, parameterType='Optional'),
             parameter("LiDAR GDB", "lidar_gdb", "DEWorkspace"),
             parameter("PA County Layer", "pa_county", "GPFeatureLayer"),
-            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", "CPPEdit\\CPP Supporting")]
+            parameter("Supporting CPP Layer", "slp", "GPFeatureLayer", cpp_supporting_path)]
 
     def getParameterInfo(self):
         return self.params
@@ -2510,7 +2466,7 @@ class AquaticCore(object):
         self.category = "General CPP Tools"
         self.params = [
             parameter("EO ID of record for which you are creating CPP:", "eoid", "GPLong"),
-            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", "CPPEdit\\CPP Core"),
+            parameter("Core CPP Layer", "cpp_core", "GPFeatureLayer", cpp_core_path),
             parameter("NHD Flowlines", "flowlines", "GPFeatureLayer", r'W:\Heritage\Heritage_Data\Heritage_Data_Tools\AquaticNetworkData.gdb\Aquatic_network\NHDFlowline'),
             parameter("Network datset built on NHD flowlines", "network", "GPNetworkDatasetLayer", r'W:\Heritage\Heritage_Data\Heritage_Data_Tools\AquaticNetworkData.gdb\Aquatic_network\PA_network_ND'),
             parameter("Wenger Buffer", "wenger", "GPFeatureLayer"),
@@ -2533,9 +2489,6 @@ class AquaticCore(object):
 
         arcpy.env.overwriteOutput = True
         arcpy.env.workspace = "memory"
-
-        eo_ptreps = "Biotics\\eo_ptreps"
-        srcfeatures = ["Biotics\\eo_sourcept", "Biotics\\eo_sourceln", "Biotics\\eo_sourcepy"]
 
         sf_buff = bufferFeatures(srcfeatures, eoid, 1)
         sf_points = arcpy.FeatureVerticesToPoints_management(sf_buff,"sf_points","ALL")
