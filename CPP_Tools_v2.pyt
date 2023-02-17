@@ -234,7 +234,7 @@ class Toolbox(object):
                       GreenSalamanderSupporting, MountainChorusFrogCore, MountainChorusFrogSupporting, LepidopteraForestMosaicCore,
                       LepidopteraForestMosaicSupporting, LepidopteraWetlandCore, LepidopteraWetlandSupporting, NorthernCricketFrogCore,
                       NorthernCricketFrogSupporting,TimberRattlesnakeSupporting, BlueSpottedSalamanderCore, RoughGreenSnakeCore,
-                      RoughGreenSnakeSupporting, GeneralWatershedSupportingTool, AquaticCore, EasternMudTurtleCore]  # <<<<<< ADD TOOLS HERE >>>>>>>>
+                      RoughGreenSnakeSupporting, GeneralWatershedSupportingTool, AquaticCore, EasternMudTurtleCore, EasternMudTurtleSupporting]  # <<<<<< ADD TOOLS HERE >>>>>>>>
 
 ######################################################################################################################################################
 ## Set Definition Query
@@ -2605,4 +2605,42 @@ class EasternMudTurtleCore(object):
                   "BioticsExportDate",
                   "SHAPE@"]
         with arcpy.da.InsertCursor(cpp_core, fields) as cursor:
+            cursor.insertRow(values)
+
+######################################################################################################################################################
+## Eastern Mud Turtle Supporting
+######################################################################################################################################################
+
+class EasternMudTurtleSupporting(object):
+    def __init__(self):
+        self.label = "Eastern Mud Turtle Supporting"
+        self.description = ""
+        self.canRunInBackground = False
+        self.category = "Reptiles"
+        self.params = [
+            parameter("Selected CPP Core", "core", "GPFeatureLayer", cpp_core_path),
+            parameter("CPP Supporting Layer", "supporting", "GPFeatureLayer", cpp_supporting_path),
+            parameter("HUC12 Watersheds", "HUC12", "GPFeatureLayer")]
+
+    def getParameterInfo(self):
+        return self.params
+
+    def execute(self, params, messages):
+        # define parameters
+        core = params[0].valueAsText
+        supporting = params[1].valueAsText
+        HUC12 = params[2].valueAsText
+
+        arcpy.SelectLayerByLocation_management(HUC12, "INTERSECT", core, "", "NEW_SELECTION")
+        huc_dissolve = arcpy.Dissolve_management(HUC12,"memory\\huc_dissolve")
+        with arcpy.da.SearchCursor(huc_dissolve, "SHAPE@") as cursor:
+            for row in cursor:
+                geom = row[0]
+
+        values = calc_attr_slp(core)
+        values.append(geom)
+
+        fields = ["SNAME", "EO_ID", "DrawnBy", "DrawnDate", "DrawnNotes", "Project", "Status", "SpecID", "ELSUBID",
+                  "BioticsExportDate", "SHAPE@"]
+        with arcpy.da.InsertCursor(supporting, fields) as cursor:
             cursor.insertRow(values)
