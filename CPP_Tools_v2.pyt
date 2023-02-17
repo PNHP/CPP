@@ -2576,21 +2576,21 @@ class EasternMudTurtleCore(object):
 
         merge_features = []
 
+        clip_geom = bufferFeatures(srcfeatures, eoid, 300)
+
         arcpy.AddMessage("create layers")
         NWI_lyr = arcpy.MakeFeatureLayer_management(NWI, "NWI_lyr", "WETLAND_TYPE <> 'Riverine'")
         waterbodies_lyr = arcpy.MakeFeatureLayer_management(waterbodies, "waterbodies_lyr")
 
         arcpy.AddMessage("select NWI wetlands")
-        arcpy.SelectLayerByLocation_management(NWI_lyr, "INTERSECT", habitat, 300, "NEW_SELECTION")
-        arcpy.SelectLayerByLocation_management(NWI_lyr, "INTERSECT", nwi, "", "SUBSET_SELECTION")
+        arcpy.SelectLayerByLocation_management(NWI_lyr, "INTERSECT", clip_geom, 300, "NEW_SELECTION")
         nwi_buff = arcpy.Buffer_analysis(NWI_lyr, "memory\\nwi_buff", 300, "", "", "ALL")
         merge_features.append(nwi_buff)
 
         arcpy.AddMessage("select NHD waterbodies")
-        arcpy.SelectLayerByLocation_management(waterbodies_lyr, "INTERSECT", habitat, 300, "NEW_SELECTION")
-        arcpy.SelectLayerByLocation_management(waterbodies_lyr, "INTERSECT", nwi, "", "SUBSET_SELECTION")
-        waterbodies_nwi_buff = arcpy.Buffer_analysis(waterbodies_lyr, "memory\\waterbodies_nwi_buff", 300, "", "", "ALL")
-        merge_features.append(waterbodies_nwi_buff)
+        arcpy.SelectLayerByLocation_management(waterbodies_lyr, "INTERSECT", clip_geom, 300, "NEW_SELECTION")
+        waterbodies_nhd_buff = arcpy.Buffer_analysis(waterbodies_lyr, "memory\\waterbodies_nhd_buff", 300, "", "", "ALL")
+        merge_features.append(waterbodies_nhd_buff)
 
         arcpy.AddMessage("merge features")
         merge_lyr = arcpy.Merge_management(merge_features, "memory\\merge_lyr")
